@@ -196,6 +196,154 @@ app.use(blockAICrawlers);
 
 ---
 
+## Apache .htaccess
+
+```apache
+# Block AI training crawlers at the Apache level
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Block by user agent
+  RewriteCond %{HTTP_USER_AGENT} (GPTBot|ChatGPT-User|ClaudeBot|Meta-ExternalAgent|PerplexityBot|Bytespider|CCBot|cohere-ai|Amazonbot|DiffBot) [NC]
+  RewriteRule .* - [F,L]
+</IfModule>
+
+# Alternative: rate-limit via mod_qos or return 429
+# For rate limiting, use mod_ratelimit or a reverse proxy (nginx/Cloudflare)
+```
+
+```apache
+# If you want to allow but throttle (requires mod_ratelimit):
+<IfModule mod_ratelimit.c>
+  <If "%{HTTP_USER_AGENT} =~ /GPTBot|ClaudeBot|Meta-ExternalAgent/">
+    SetOutputFilter RATE_LIMIT
+    SetEnv rate-limit 50
+  </If>
+</IfModule>
+```
+
+---
+
+## AWS CloudFront + WAF
+
+### Option 1: CloudFront Function (free tier, low latency)
+
+```javascript
+// CloudFront Function — attach to viewer-request event
+function handler(event) {
+  var request = event.request;
+  var ua = (request.headers['user-agent'] || { value: '' }).value;
+
+  var blocked = [
+    'GPTBot', 'ChatGPT-User', 'ClaudeBot', 'Meta-ExternalAgent',
+    'PerplexityBot', 'Bytespider', 'CCBot', 'cohere-ai', 'Amazonbot'
+  ];
+
+  for (var i = 0; i < blocked.length; i++) {
+    if (ua.indexOf(blocked[i]) !== -1) {
+      return {
+        statusCode: 403,
+        statusDescription: 'Forbidden',
+        body: 'AI crawler access not permitted'
+      };
+    }
+  }
+
+  return request;
+}
+```
+
+### Option 2: AWS WAF Rule (Console / Terraform)
+
+```hcl
+# Terraform: AWS WAF rule to block AI crawlers
+resource "aws_wafv2_rule_group" "block_ai_crawlers" {
+  name     = "BlockAICrawlers"
+  scope    = "CLOUDFRONT"
+  capacity = 50
+
+  rule {
+    name     = "BlockGPTBot"
+    priority = 1
+    action { block {} }
+    statement {
+      byte_match_statement {
+        field_to_match { single_header { name = "user-agent" } }
+        positional_constraint = "CONTAINS"
+        search_string         = "GPTBot"
+        text_transformation { priority = 0; type = "LOWERCASE" }
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "BlockGPTBot"
+      sampled_requests_enabled   = true
+    }
+  }
+  # Add similar rules for ClaudeBot, Meta-ExternalAgent, etc.
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "BlockAICrawlers"
+    sampled_requests_enabled   = true
+  }
+}
+```
+
+**Note:** WAF adds ~$5/month base cost. CloudFront Functions are effectively free for this use case.
+
+---
+
+## Django / Python
+
+```python
+# middleware.py
+AI_CRAWLERS = [
+    'GPTBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-Web',
+    'Meta-ExternalAgent', 'PerplexityBot', 'Bytespider',
+    'CCBot', 'cohere-ai', 'Amazonbot', 'DiffBot'
+]
+
+class BlockAICrawlersMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        ua = request.META.get('HTTP_USER_AGENT', '')
+        if any(crawler in ua for crawler in AI_CRAWLERS):
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden('AI crawler access not permitted')
+        return self.get_response(request)
+
+# settings.py
+MIDDLEWARE = [
+    'myapp.middleware.BlockAICrawlersMiddleware',
+    # ... other middleware
+]
+```
+
+---
+
+## Reported Cost Incidents
+
+Publicly reported cases of AI crawlers causing unexpected infrastructure bills. Add yours via PR.
+
+| Date | Crawler | Platform | Reported Impact | Source |
+|------|---------|----------|-----------------|--------|
+| 2025-02 | Meta-ExternalAgent | Vercel | "Zuck's bot increased our Vercel bill 10x" | HN thread (7 pts) |
+| 2025-03 | GPTBot | AWS CloudFront | 40% bill spike, traced to docs site | Reddit r/webdev |
+| 2025-Q3 | Bytespider | Cloudflare Pages | Database query amplification, 3× usual bill | Private report |
+| 2026-Q1 | Multiple | GitHub Pages LFS | LFS bandwidth quota hit in 2 days | GitHub Community |
+| 2026-Q2 | Meta-ExternalAgent | Netlify | Exceeded free-tier bandwidth, surprise $180 bill | Reddit r/selfhosted |
+
+**Pattern:** Most incidents involve crawlers that:
+- Ignore `Crawl-delay` in robots.txt
+- Hit database-backed pages that CDNs don't cache
+- Run parallel workers with no per-domain rate limits
+- Spike at off-hours when nobody monitors dashboards
+
+---
+
 ## Want Monitoring + Alerts?
 
 The configs above block crawlers but won't tell you which ones are hitting hardest, what it's costing you, or alert you before the invoice arrives.
