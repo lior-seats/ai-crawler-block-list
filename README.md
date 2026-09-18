@@ -6,6 +6,16 @@ A community-maintained reference of AI crawler user agents, their traffic charac
 
 ---
 
+## 🔍 Free Tool: Check If Your Site Blocks AI Crawlers
+
+**→ [lior-seats.github.io/crawl-check/](https://lior-seats.github.io/crawl-check/)**
+
+Paste your `robots.txt` (or enter your URL) and instantly see which AI crawlers are blocked vs. allowed through. Free, no signup.
+
+---
+
+---
+
 ## Known AI Crawler User Agents (2026)
 
 | Crawler | Company | User Agent String | robots.txt directive |
