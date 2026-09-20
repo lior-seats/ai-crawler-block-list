@@ -14,6 +14,16 @@ Paste your `robots.txt` (or enter your URL) and instantly see which AI crawlers 
 
 ---
 
+## 📊 Real-World Data: How Developer Platforms Handle AI Crawlers
+
+**→ [I checked 20 popular developer platforms' robots.txt — most aren't blocking AI crawlers correctly](https://lior-seats.github.io/blog/ai-crawlers-robots-txt.html)**
+
+Key findings:
+- 6/20 platforms have **zero** AI bot rules (Heroku, Stripe, Linear, Notion, Turso, Upstash)
+- 7/20 use only `Content-Signal` (advisory intent, not actual blocking)
+- Only 2/20 have comprehensive coverage across all major crawlers
+- meta-externalagent — the bot most cited for Vercel bill spikes — is missing from most block lists
+
 ---
 
 ## Known AI Crawler User Agents (2026)
